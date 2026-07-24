@@ -37,6 +37,27 @@ export class LLMError extends OpenFoxError {
   }
 }
 
+export class RateLimitError extends LLMError {
+  constructor(
+    message: string,
+    public readonly statusCode: number,
+    public readonly retryAfterMs?: number,
+    public readonly attempt: number = 0,
+  ) {
+    super(message, {
+      code: 'RATE_LIMIT_ERROR',
+      statusCode,
+      ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+      attempt,
+    })
+    this.name = 'RateLimitError'
+  }
+}
+
+export function isRateLimitError(error: unknown): error is RateLimitError {
+  return error instanceof RateLimitError
+}
+
 export class ValidationError extends OpenFoxError {
   constructor(message: string, details?: unknown) {
     super(message, 'VALIDATION_ERROR', details)

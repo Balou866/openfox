@@ -14,6 +14,7 @@ import type {
   ChatTodoPayload,
   ChatProgressPayload,
   ChatFormatRetryPayload,
+  ChatRateLimitPayload,
   ChatMessagePayload,
   ChatMessageUpdatedPayload,
   ChatDonePayload,
@@ -498,6 +499,44 @@ export function handleServerMessage(
       }
       const payload = message.payload as ChatFormatRetryPayload
       console.warn('Format retry:', payload.attempt, '/', payload.maxAttempts)
+      break
+    }
+
+    case 'chat.rate_limit': {
+      if (!isMessageForCurrentSession(message, get().currentSession?.id ?? null)) {
+        markBackgroundSessionUnread()
+        break
+      }
+      const payload = message.payload as ChatRateLimitPayload
+      if (payload.kind === 'waiting') {
+        console.warn(`Rate limit: ${payload.currentRpm}/${payload.maxRpm} RPM — waiting ${payload.waitMs}ms for a slot`)
+      } else {
+        console.warn(
+          `Rate limit: 429 retry ${payload.attempt}/${payload.maxAttempts} in ${payload.waitMs}ms (${payload.reason})`,
+        )
+      }
+
+      // Fold the event onto the streaming message so the badge renders live.
+      const targetId = payload.messageId
+      if (targetId) {
+        const entry: NonNullable<Message['rateLimitEvents']>[number] = {
+          kind: payload.kind,
+          waitMs: payload.waitMs,
+          timestamp: Date.now(),
+          ...(payload.kind === 'waiting'
+            ? { currentRpm: payload.currentRpm, maxRpm: payload.maxRpm }
+            : {
+                attempt: payload.attempt,
+                maxAttempts: payload.maxAttempts,
+                reason: payload.reason,
+              }),
+        }
+        set((state) => ({
+          messages: state.messages.map((m) =>
+            m.id === targetId ? { ...m, rateLimitEvents: [...(m.rateLimitEvents ?? []), entry] } : m,
+          ),
+        }))
+      }
       break
     }
 

@@ -21,6 +21,7 @@ function createMockClient(events: LLMStreamEvent[]) {
     getBackend: () => 'unknown' as const,
     setBackend: () => {},
     setModel: () => {},
+    setRateLimit: () => {},
     stream: async function* () {
       for (const event of events) {
         yield event
@@ -170,6 +171,7 @@ describe('stream-pure', () => {
       getBackend: () => 'unknown' as const,
       setBackend: () => {},
       setModel: () => {},
+      setRateLimit: () => {},
       stream: async function* (_request: { signal?: AbortSignal }) {
         yield { type: 'text_delta' as const, content: 'Hello ' }
         await new Promise<void>((resolve) => setTimeout(resolve, 10))

@@ -20,6 +20,7 @@ import type {
   ChatTodoPayload,
   ChatProgressPayload,
   ChatFormatRetryPayload,
+  ChatRateLimitPayload,
   ChatMessagePayload,
   ChatMessageUpdatedPayload,
   ChatDonePayload,
@@ -255,6 +256,13 @@ export function createChatFormatRetryMessage(
     ...(field !== undefined ? { field } : {}),
     ...(matchedContent !== undefined ? { matchedContent } : {}),
   })
+}
+
+export function createChatRateLimitMessage(
+  kind: 'waiting' | 'retry',
+  payload: Omit<ChatRateLimitPayload, 'kind'>,
+): ServerMessage<ChatRateLimitPayload> {
+  return createServerMessage('chat.rate_limit', { kind, ...payload })
 }
 
 export function createChatMessageMessage(message: Message): ServerMessage<ChatMessagePayload> {
@@ -566,6 +574,26 @@ export function storedEventToServerMessage(event: StoredEvent): ServerMessage | 
     case 'pattern.retry': {
       const data = event.data as Extract<TurnEvent, { type: 'pattern.retry' }>['data']
       return createChatFormatRetryMessage(data.attempt, data.maxAttempts, data.pattern, data.field, data.matchedContent)
+    }
+
+    case 'rate_limit.waiting': {
+      const data = event.data as Extract<TurnEvent, { type: 'rate_limit.waiting' }>['data']
+      return createChatRateLimitMessage('waiting', {
+        messageId: data.messageId,
+        currentRpm: data.currentRpm,
+        maxRpm: data.maxRpm,
+        waitMs: data.waitMs,
+      })
+    }
+    case 'rate_limit.retry': {
+      const data = event.data as Extract<TurnEvent, { type: 'rate_limit.retry' }>['data']
+      return createChatRateLimitMessage('retry', {
+        messageId: data.messageId,
+        attempt: data.attempt,
+        maxAttempts: data.maxAttempts,
+        waitMs: data.waitMs,
+        reason: data.reason,
+      })
     }
 
     case 'path.confirmation_pending':

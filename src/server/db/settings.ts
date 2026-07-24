@@ -22,6 +22,7 @@ export const SETTINGS_KEYS = {
   CACHE_WARMING: 'cache.warming',
   KEYBINDINGS: 'keybindings',
   RETRY_PATTERNS: 'agent.retryPatterns',
+  LLM_RATE_LIMIT: 'llm.rateLimit',
   SKILLS_DIRECTORIES: 'skills.directories',
   SEARCH_ENGINE: 'search.engine',
   SEARCH_TAVILY_API_KEY: 'search.tavilyApiKey',
@@ -49,6 +50,13 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   [SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT]: 'false',
   [SETTINGS_KEYS.CACHE_WARMING]: 'false',
   [SETTINGS_KEYS.RETRY_PATTERNS]: JSON.stringify({ patterns: [], maxRetriesPerTurn: 10 }),
+  [SETTINGS_KEYS.LLM_RATE_LIMIT]: JSON.stringify({
+    enabled: false,
+    rpm: 40,
+    retryOn429: true,
+    maxRetries: 5,
+    initialBackoffMs: 2000,
+  }),
   [SETTINGS_KEYS.KEYBINDINGS]: JSON.stringify({
     terminalToggle: { type: 'double-press', key: 'Control', threshold: 300 },
     quickAction: { type: 'double-press', key: 'Shift', threshold: 300 },
@@ -121,4 +129,57 @@ export function getAllSettings(): Record<string, string> {
 export function getMaxVisibleItems(): number {
   const setting = getSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS)
   return setting ? parseInt(setting, 10) : 0
+}
+
+// ============================================================================
+// Rate Limit Configuration
+// ============================================================================
+
+export interface RateLimitConfig {
+  enabled: boolean
+  rpm: number
+  retryOn429: boolean
+  maxRetries: number
+  initialBackoffMs: number
+}
+
+export const RATE_LIMIT_DEFAULTS: RateLimitConfig = {
+  enabled: false,
+  rpm: 40,
+  retryOn429: true,
+  maxRetries: 5,
+  initialBackoffMs: 2000,
+}
+
+export function getRateLimitConfig(): RateLimitConfig {
+  const raw = getSetting(SETTINGS_KEYS.LLM_RATE_LIMIT)
+  if (!raw) {
+    return { ...RATE_LIMIT_DEFAULTS }
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return { ...RATE_LIMIT_DEFAULTS }
+  }
+
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { ...RATE_LIMIT_DEFAULTS }
+  }
+
+  const obj = parsed as Record<string, unknown>
+  const clamp = (value: unknown, min: number, max: number, fallback: number): number => {
+    const n = typeof value === 'number' ? value : Number(value)
+    if (!Number.isFinite(n)) return fallback
+    return Math.min(Math.max(Math.floor(n), min), max)
+  }
+
+  return {
+    enabled: typeof obj['enabled'] === 'boolean' ? obj['enabled'] : RATE_LIMIT_DEFAULTS.enabled,
+    rpm: clamp(obj['rpm'], 1, 1000, RATE_LIMIT_DEFAULTS.rpm),
+    retryOn429: typeof obj['retryOn429'] === 'boolean' ? obj['retryOn429'] : RATE_LIMIT_DEFAULTS.retryOn429,
+    maxRetries: clamp(obj['maxRetries'], 1, 20, RATE_LIMIT_DEFAULTS.maxRetries),
+    initialBackoffMs: clamp(obj['initialBackoffMs'], 100, 60_000, RATE_LIMIT_DEFAULTS.initialBackoffMs),
+  }
 }

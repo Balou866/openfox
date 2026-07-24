@@ -117,4 +117,59 @@ describe('AssistantMessage', () => {
     expect(html).not.toContain('my-provider/')
   })
 
+  it('renders rate-limit waiting and retry badges', () => {
+    const html = renderToStaticMarkup(
+      <AssistantMessage
+        message={{
+          id: 'assistant-3',
+          role: 'assistant',
+          content: 'Response after throttle',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          tokenCount: 0,
+          isStreaming: false,
+          rateLimitEvents: [
+            {
+              kind: 'waiting',
+              currentRpm: 40,
+              maxRpm: 40,
+              waitMs: 12000,
+              timestamp: 1,
+            },
+            {
+              kind: 'retry',
+              attempt: 2,
+              maxAttempts: 5,
+              waitMs: 4300,
+              reason: 'retry-after',
+              timestamp: 2,
+            },
+          ],
+        }}
+      />,
+    )
+
+    expect(html).toContain('Rate limit 40/40 RPM')
+    expect(html).toContain('waiting 12.0s')
+    expect(html).toContain('429 error')
+    expect(html).toContain('retry 2/5 in 4.3s')
+    expect(html).toContain('Retry-After')
+  })
+
+  it('does not render a rate-limit badge when there are no events', () => {
+    const html = renderToStaticMarkup(
+      <AssistantMessage
+        message={{
+          id: 'assistant-4',
+          role: 'assistant',
+          content: 'Plain response',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          tokenCount: 0,
+          isStreaming: false,
+        }}
+      />,
+    )
+
+    expect(html).not.toContain('Rate limit')
+    expect(html).not.toContain('429 error')
+  })
 })

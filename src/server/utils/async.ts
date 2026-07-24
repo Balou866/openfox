@@ -31,6 +31,78 @@ export async function withRetry<T>(operation: () => Promise<T>, options: RetryOp
   throw lastError
 }
 
+// ----------------------------------------------------------------------------
+// Exponential backoff with jitter (for HTTP 429 retries)
+// ----------------------------------------------------------------------------
+
+export interface BackoffOptions {
+  maxRetries: number
+  initialBackoffMs: number
+  capMs?: number
+  jitterMs?: number
+}
+
+export interface BackoffDelayResult {
+  delayMs: number
+  reason: 'retry-after' | 'backoff'
+}
+
+const DEFAULT_BACKOFF_CAP_MS = 32_000
+const DEFAULT_BACKOFF_JITTER_MS = 500
+
+export function computeExponentialBackoff(
+  attempt: number,
+  initialBackoffMs: number,
+  capMs: number = DEFAULT_BACKOFF_CAP_MS,
+  jitterMs: number = DEFAULT_BACKOFF_JITTER_MS,
+): number {
+  const raw = initialBackoffMs * Math.pow(2, attempt)
+  const capped = Math.min(raw, capMs)
+  const jitter = jitterMs > 0 ? Math.random() * jitterMs : 0
+  return capped + jitter
+}
+
+export function parseRetryAfter(value: string | null | undefined, now: number = Date.now()): number | null {
+  if (value === null || value === undefined || value.trim() === '') {
+    return null
+  }
+  const trimmed = value.trim()
+
+  const seconds = Number(trimmed)
+  if (!Number.isNaN(seconds) && trimmed !== '') {
+    if (seconds < 0) return 0
+    return Math.round(seconds * 1000)
+  }
+
+  const parsed = Date.parse(trimmed)
+  if (!Number.isNaN(parsed)) {
+    const diff = parsed - now
+    return diff > 0 ? diff : 0
+  }
+
+  return null
+}
+
+export function computeRetryDelay(
+  attempt: number,
+  options: BackoffOptions,
+  retryAfterMs?: number | null,
+): BackoffDelayResult {
+  if (retryAfterMs !== undefined && retryAfterMs !== null) {
+    const cap = options.capMs ?? DEFAULT_BACKOFF_CAP_MS
+    const clamped = Math.min(Math.max(0, retryAfterMs), cap)
+    return { delayMs: clamped, reason: 'retry-after' }
+  }
+  const jitter = options.jitterMs ?? DEFAULT_BACKOFF_JITTER_MS
+  const delayMs = computeExponentialBackoff(
+    attempt,
+    options.initialBackoffMs,
+    options.capMs ?? DEFAULT_BACKOFF_CAP_MS,
+    jitter,
+  )
+  return { delayMs, reason: 'backoff' }
+}
+
 export function createDeferred<T>(): {
   promise: Promise<T>
   resolve: (value: T) => void

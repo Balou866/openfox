@@ -1646,6 +1646,133 @@ describe('useSessionStore session isolation', () => {
   })
 })
 
+describe('chat.rate_limit message folding', () => {
+  beforeEach(() => {
+    wsSendMock.mockClear()
+    wsSubscribeMock.mockClear()
+    wsConnectMock.mockClear()
+    wsDisconnectMock.mockClear()
+    wsStatusMock.mockClear()
+    fetchMock.mockClear()
+  })
+
+  it('attaches waiting and retry events to the streaming assistant message', async () => {
+    const useSessionStore = await loadSessionStore()
+
+    useSessionStore.setState((state) => ({
+      ...state,
+      currentSession: {
+        id: 'session-1',
+        projectId: 'project-1',
+        workdir: '/tmp/project-1',
+        mode: 'planner',
+        phase: 'plan',
+        isRunning: true,
+        criteria: [],
+        summary: null,
+      } as any,
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'streaming',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          tokenCount: 0,
+          isStreaming: true,
+        },
+      ],
+    }))
+
+    useSessionStore.getState().handleServerMessage({
+      id: 'rl-1',
+      type: 'chat.rate_limit',
+      sessionId: 'session-1',
+      payload: {
+        kind: 'waiting',
+        messageId: 'assistant-1',
+        currentRpm: 40,
+        maxRpm: 40,
+        waitMs: 5000,
+      },
+    })
+
+    useSessionStore.getState().handleServerMessage({
+      id: 'rl-2',
+      type: 'chat.rate_limit',
+      sessionId: 'session-1',
+      payload: {
+        kind: 'retry',
+        messageId: 'assistant-1',
+        attempt: 1,
+        maxAttempts: 5,
+        waitMs: 2000,
+        reason: 'retry-after',
+      },
+    })
+
+    const messages = useSessionStore.getState().messages
+    const assistant = messages.find((m) => m.id === 'assistant-1')!
+    expect(assistant.rateLimitEvents).toHaveLength(2)
+    expect(assistant.rateLimitEvents![0]).toMatchObject({
+      kind: 'waiting',
+      currentRpm: 40,
+      maxRpm: 40,
+      waitMs: 5000,
+    })
+    expect(assistant.rateLimitEvents![1]).toMatchObject({
+      kind: 'retry',
+      attempt: 1,
+      maxAttempts: 5,
+      reason: 'retry-after',
+    })
+  })
+
+  it('ignores rate_limit events for other sessions', async () => {
+    const useSessionStore = await loadSessionStore()
+
+    useSessionStore.setState((state) => ({
+      ...state,
+      currentSession: {
+        id: 'session-1',
+        projectId: 'project-1',
+        workdir: '/tmp/project-1',
+        mode: 'planner',
+        phase: 'plan',
+        isRunning: true,
+        criteria: [],
+        summary: null,
+      } as any,
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'streaming',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          tokenCount: 0,
+          isStreaming: true,
+        },
+      ],
+    }))
+
+    useSessionStore.getState().handleServerMessage({
+      id: 'rl-other',
+      type: 'chat.rate_limit',
+      sessionId: 'session-2',
+      payload: {
+        kind: 'waiting',
+        messageId: 'assistant-1',
+        currentRpm: 40,
+        maxRpm: 40,
+        waitMs: 5000,
+      },
+    })
+
+    const messages = useSessionStore.getState().messages
+    const assistant = messages.find((m) => m.id === 'assistant-1')!
+    expect(assistant.rateLimitEvents).toBeUndefined()
+  })
+})
+
 describe('cross-session path confirmations', () => {
   beforeEach(() => {
     wsSendMock.mockClear()

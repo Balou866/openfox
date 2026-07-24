@@ -5,7 +5,8 @@ import type {
   ChatCompletionChunk,
 } from './openai-types.js'
 import { logger } from '../utils/logger.js'
-import { LLMError } from '../utils/errors.js'
+import { LLMError, RateLimitError } from '../utils/errors.js'
+import { parseRetryAfter } from '../utils/async.js'
 import { proxyFetch } from './proxy.js'
 
 export interface HttpClientOptions {
@@ -45,6 +46,14 @@ export class OpenAIHttpClient {
       body: bodyStr,
       signal: options?.signal ?? null,
     })
+
+    if (response.status === 429) {
+      const errorText = await response.text().catch(() => '')
+      const retryAfterRaw = response.headers.get('retry-after')
+      const retryAfterMs = parseRetryAfter(retryAfterRaw)
+      logger.warn('LLM rate limit (429)', { retryAfterRaw, retryAfterMs, body: errorText.slice(0, 200) })
+      throw new RateLimitError(`HTTP 429: ${errorText || 'Too Many Requests'}`, 429, retryAfterMs ?? undefined)
+    }
 
     if (!response.ok) {
       const errorText = await response.text()

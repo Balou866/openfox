@@ -201,6 +201,7 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
     toolChoice,
     reasoningEffort,
     signal: combinedSignal,
+    messageId,
     modelSettings: options.modelSettings,
   })
 

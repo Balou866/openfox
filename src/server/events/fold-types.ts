@@ -12,6 +12,7 @@ import type {
 } from './types.js'
 import type { SessionMode, SessionPhase, ContextState, Criterion, Todo, MetadataEntry } from '../../shared/types.js'
 import type { FormatRetry } from './apply-events.js'
+import type { RateLimitEntry } from './types.js'
 
 export interface ContextMessage {
   role: 'user' | 'assistant' | 'tool'
@@ -61,6 +62,7 @@ export interface FoldedSessionState {
   sessionTitle?: string
   visionFallbacks?: VisionFallback[]
   formatRetries?: FormatRetry[]
+  rateLimitEvents?: RateLimitEntry[]
   pendingUserInput?: PendingUserInput
   taskStats?: TaskStats
   messageStats?: MessageStatsEntry[]

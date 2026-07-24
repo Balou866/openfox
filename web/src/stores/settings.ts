@@ -22,6 +22,7 @@ export const SETTINGS_KEYS = {
   CACHE_WARMING: 'cache.warming',
   KEYBINDINGS: 'keybindings',
   RETRY_PATTERNS: 'agent.retryPatterns',
+  LLM_RATE_LIMIT: 'llm.rateLimit',
   SKILLS_DIRECTORIES: 'skills.directories',
   SEARCH_ENGINE: 'search.engine',
   SEARCH_TAVILY_API_KEY: 'search.tavilyApiKey',

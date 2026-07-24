@@ -13,6 +13,7 @@ import type {
   SnapshotMessage,
 } from './types.js'
 import type { FormatRetry } from './apply-events.js'
+import type { RateLimitEntry } from './types.js'
 import type { EventLike, FoldedSessionState } from './fold-types.js'
 import type { MessageStats, MetadataEntry } from '../../shared/types.js'
 import {
@@ -258,6 +259,7 @@ export function foldSessionState(
   let sessionTitle: string | undefined
   const visionFallbacks: VisionFallback[] = []
   const formatRetries: FormatRetry[] = []
+  const rateLimitEvents: RateLimitEntry[] = []
   let pendingUserInput: PendingUserInput | undefined
   let taskStats: TaskStats | undefined
   const messageStats: MessageStatsEntry[] = []
@@ -307,6 +309,34 @@ export function foldSessionState(
           matchedContent: string
         }
         formatRetries.push({ attempt: data.attempt, maxAttempts: data.maxAttempts, timestamp: getTimestamp(event) })
+        break
+      }
+      case 'rate_limit.waiting': {
+        const data = event.data as { currentRpm: number; maxRpm: number; waitMs: number }
+        rateLimitEvents.push({
+          kind: 'waiting',
+          currentRpm: data.currentRpm,
+          maxRpm: data.maxRpm,
+          waitMs: data.waitMs,
+          timestamp: getTimestamp(event),
+        })
+        break
+      }
+      case 'rate_limit.retry': {
+        const data = event.data as {
+          attempt: number
+          maxAttempts: number
+          waitMs: number
+          reason: 'retry-after' | 'backoff'
+        }
+        rateLimitEvents.push({
+          kind: 'retry',
+          attempt: data.attempt,
+          maxAttempts: data.maxAttempts,
+          waitMs: data.waitMs,
+          reason: data.reason,
+          timestamp: getTimestamp(event),
+        })
         break
       }
       case 'chat.ask_user': {
@@ -369,6 +399,7 @@ export function foldSessionState(
     ...(sessionTitle !== undefined && { sessionTitle }),
     ...(visionFallbacks.length > 0 && { visionFallbacks }),
     ...(formatRetries.length > 0 && { formatRetries }),
+    ...(rateLimitEvents.length > 0 && { rateLimitEvents }),
     ...(pendingUserInput !== undefined && { pendingUserInput }),
     ...(taskStats !== undefined && { taskStats }),
     ...(messageStats.length > 0 && { messageStats }),
@@ -400,6 +431,7 @@ export function buildSnapshot(
     ...(foldedState.sessionTitle !== undefined && { sessionTitle: foldedState.sessionTitle }),
     ...(foldedState.visionFallbacks !== undefined && { visionFallbacks: foldedState.visionFallbacks }),
     ...(foldedState.formatRetries !== undefined && { formatRetries: foldedState.formatRetries }),
+    ...(foldedState.rateLimitEvents !== undefined && { rateLimitEvents: foldedState.rateLimitEvents }),
     ...(foldedState.pendingUserInput !== undefined && { pendingUserInput: foldedState.pendingUserInput }),
     ...(foldedState.taskStats !== undefined && { taskStats: foldedState.taskStats }),
     ...(foldedState.messageStats !== undefined && { messageStats: foldedState.messageStats }),

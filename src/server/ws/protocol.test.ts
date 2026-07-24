@@ -9,6 +9,7 @@ import {
   createChatMessageUpdatedMessage,
   createChatPathConfirmationMessage,
   createChatProgressMessage,
+  createChatRateLimitMessage,
   createChatTodoMessage,
   createChatToolOutputMessage,
   createChatToolPreparingMessage,
@@ -376,6 +377,31 @@ describe('ws/protocol', () => {
         payload: { attempt: 2, maxAttempts: 10 },
       })
       expect(
+        createChatRateLimitMessage('waiting', { messageId: 'm1', currentRpm: 40, maxRpm: 40, waitMs: 5000 }),
+      ).toEqual({
+        type: 'chat.rate_limit',
+        payload: { kind: 'waiting', messageId: 'm1', currentRpm: 40, maxRpm: 40, waitMs: 5000 },
+      })
+      expect(
+        createChatRateLimitMessage('retry', {
+          messageId: 'm1',
+          attempt: 1,
+          maxAttempts: 5,
+          waitMs: 2000,
+          reason: 'retry-after',
+        }),
+      ).toEqual({
+        type: 'chat.rate_limit',
+        payload: {
+          kind: 'retry',
+          messageId: 'm1',
+          attempt: 1,
+          maxAttempts: 5,
+          waitMs: 2000,
+          reason: 'retry-after',
+        },
+      })
+      expect(
         createChatMessageMessage({
           id: 'm1',
           role: 'assistant',
@@ -594,6 +620,16 @@ describe('ws/protocol', () => {
         },
         {
           ...baseEvent,
+          type: 'rate_limit.waiting',
+          data: { messageId: 'm1', currentRpm: 40, maxRpm: 40, waitMs: 5000 },
+        },
+        {
+          ...baseEvent,
+          type: 'rate_limit.retry',
+          data: { messageId: 'm1', attempt: 1, maxAttempts: 5, waitMs: 2000, reason: 'retry-after' },
+        },
+        {
+          ...baseEvent,
           type: 'turn.snapshot',
           data: {
             mode: 'planner',
@@ -726,9 +762,24 @@ describe('ws/protocol', () => {
         type: 'chat.format_retry',
         payload: { attempt: 2, maxAttempts: 10, pattern: 'test', field: 'content', matchedContent: 'test' },
       })
-      expect(converted[18]).toBeNull()
-      expect(converted[19]).toBeNull()
+      expect(converted[18]).toEqual({
+        type: 'chat.rate_limit',
+        payload: { kind: 'waiting', messageId: 'm1', currentRpm: 40, maxRpm: 40, waitMs: 5000 },
+      })
+      expect(converted[19]).toEqual({
+        type: 'chat.rate_limit',
+        payload: {
+          kind: 'retry',
+          messageId: 'm1',
+          attempt: 1,
+          maxAttempts: 5,
+          waitMs: 2000,
+          reason: 'retry-after',
+        },
+      })
       expect(converted[20]).toBeNull()
+      expect(converted[21]).toBeNull()
+      expect(converted[22]).toBeNull()
     })
 
     it('passes subAgentType from message.delta to chat.delta payload', () => {

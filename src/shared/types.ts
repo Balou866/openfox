@@ -275,6 +275,17 @@ export interface Message {
   originalMessageIds?: string[]
   segments?: MessageSegment[] // Preserves streaming order: text/thinking chunks + tool call refs
   stats?: MessageStats // LLM performance stats for this response
+  formatRetries?: { attempt: number; maxAttempts: number; timestamp: number }[]
+  rateLimitEvents?: {
+    kind: 'waiting' | 'retry'
+    timestamp: number
+    waitMs: number
+    reason?: 'retry-after' | 'backoff'
+    currentRpm?: number
+    maxRpm?: number
+    attempt?: number
+    maxAttempts?: number
+  }[]
   partial?: boolean // true if message was interrupted mid-stream
   completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done' // How the message ended
   isSystemGenerated?: boolean // true for auto-injected messages (retry prompts, etc.)

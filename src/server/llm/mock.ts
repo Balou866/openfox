@@ -823,6 +823,7 @@ export function createMockLLMClient(): LLMClientWithModel {
     setBackend: (b: Backend) => {
       backend = b
     },
+    setRateLimit: () => {},
 
     async complete(request: LLMCompletionRequest): Promise<LLMCompletionResponse> {
       const prompt = getLastUserPrompt(request)

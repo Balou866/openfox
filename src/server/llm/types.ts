@@ -45,6 +45,8 @@ export interface LLMCompletionRequest {
   /** When true, the client-level reasoningEffort (from thinkingLevel) is NOT applied.
    *  Used by non-thinking callers (e.g. title generation) that want to opt out. */
   skipClientReasoningEffort?: boolean
+  /** Associated chat message id, forwarded to rate-limit callbacks for event attribution. */
+  messageId?: string
 }
 
 export interface LLMCompletionResponse {

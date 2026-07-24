@@ -93,6 +93,7 @@ export type ServerMessageType =
   | 'chat.todo' // Todo list update (displayed in chat)
   | 'chat.progress' // Progress update (e.g., "Generating summary...")
   | 'chat.format_retry' // Model used wrong format (XML tools), retrying
+  | 'chat.rate_limit' // Client-side rate limiting (waiting for RPM slot or retrying after 429)
   | 'chat.message' // Full message added (system-generated, etc.)
   | 'chat.message_updated' // Message updated (e.g., isStreaming changed)
   | 'chat.done' // Current generation complete
@@ -256,6 +257,17 @@ export interface ChatFormatRetryPayload {
   pattern?: string
   field?: string
   matchedContent?: string
+}
+
+export interface ChatRateLimitPayload {
+  kind: 'waiting' | 'retry'
+  messageId: string
+  currentRpm?: number
+  maxRpm?: number
+  attempt?: number
+  maxAttempts?: number
+  waitMs: number
+  reason?: 'retry-after' | 'backoff'
 }
 
 export interface ChatVisionFallbackPayload {

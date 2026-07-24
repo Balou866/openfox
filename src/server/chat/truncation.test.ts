@@ -12,6 +12,7 @@ function createMockClient(events: LLMStreamEvent[]) {
     getBackend: () => 'unknown' as const,
     setBackend: () => {},
     setModel: () => {},
+    setRateLimit: () => {},
     stream: async function* () {
       for (const event of events) {
         yield event

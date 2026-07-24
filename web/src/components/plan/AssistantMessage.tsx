@@ -189,6 +189,9 @@ export const AssistantMessage = memo(function AssistantMessage({
     <div className="feed-item" onContextMenu={(e) => onContextMenu(e, !!sessionId)}>
       <div className="min-w-0">
         {forkError && <p className="text-xs text-accent-error mb-1 ml-0.5">{forkError}</p>}
+        {message.rateLimitEvents && message.rateLimitEvents.length > 0 && (
+          <RateLimitBadge events={message.rateLimitEvents} />
+        )}
         {elements.map((element, i) => {
           switch (element.type) {
             case 'thinking':
@@ -338,3 +341,42 @@ export const AssistantMessage = memo(function AssistantMessage({
     </div>
   )
 })
+
+function formatWait(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+function RateLimitBadge({ events }: { events: NonNullable<Message['rateLimitEvents']> }) {
+  return (
+    <div className="flex flex-col gap-1 mb-2">
+      {events.map((event, i) => {
+        if (event.kind === 'waiting') {
+          return (
+            <div
+              key={i}
+              className="flex items-center gap-1.5 text-[11px] text-text-muted bg-bg-secondary rounded px-2 py-1 w-fit"
+            >
+              <InfoIcon className="w-3 h-3" />
+              <span>
+                Rate limit {event.currentRpm}/{event.maxRpm} RPM — waiting {formatWait(event.waitMs)}…
+              </span>
+            </div>
+          )
+        }
+        return (
+          <div
+            key={i}
+            className="flex items-center gap-1.5 text-[11px] text-amber-500 bg-bg-secondary rounded px-2 py-1 w-fit"
+          >
+            <WarningSmallIcon className="w-3 h-3" />
+            <span>
+              429 error — retry {event.attempt}/{event.maxAttempts} in {formatWait(event.waitMs)} (
+              {event.reason === 'retry-after' ? 'Retry-After' : 'backoff'})
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}

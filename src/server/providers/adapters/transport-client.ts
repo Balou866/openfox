@@ -49,6 +49,7 @@ export function createTransportLLMClient(
     setBackend(next) {
       backend = next
     },
+    setRateLimit: () => {},
     complete: async (request) => {
       const supportsVision = request.modelSettings?.supportsVision ?? profile.supportsVision ?? false
       const resolved = { ...request, messages: await resolveAttachmentsInMessages(request.messages, supportsVision) }

@@ -107,6 +107,37 @@ describe('apply-events.ts new handlers', () => {
     })
   })
 
+  describe('rate_limit events', () => {
+    it('populates rateLimitEvents on assistant messages (waiting + retry)', () => {
+      const events: StoredEvent[] = [
+        { ...baseEvent, type: 'message.start', data: { messageId: 'm1', role: 'assistant' } },
+        {
+          ...baseEvent,
+          type: 'rate_limit.waiting',
+          data: { messageId: 'm1', currentRpm: 40, maxRpm: 40, waitMs: 5000 },
+        },
+        {
+          ...baseEvent,
+          type: 'rate_limit.retry',
+          data: {
+            messageId: 'm1',
+            attempt: 1,
+            maxAttempts: 5,
+            waitMs: 2000,
+            reason: 'retry-after',
+          },
+        },
+      ]
+
+      const { messages } = buildMessagesFromStoredEvents(events)
+      const entries = (messages[0] as { rateLimitEvents?: { kind: string }[] }).rateLimitEvents
+
+      expect(entries).toHaveLength(2)
+      expect(entries![0]).toMatchObject({ kind: 'waiting', currentRpm: 40, maxRpm: 40, waitMs: 5000 })
+      expect(entries![1]).toMatchObject({ kind: 'retry', attempt: 1, maxAttempts: 5, reason: 'retry-after' })
+    })
+  })
+
   describe('chat.done events', () => {
     it('sets isComplete and completeReason on messages', () => {
       const events: StoredEvent[] = [

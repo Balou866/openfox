@@ -20,6 +20,8 @@ import {
   parseToolArguments,
 } from './client-pure.js'
 import { OpenAIHttpClient } from './http-client.js'
+import { createRateLimiter, type RateLimiter } from './rate-limiter.js'
+import { runWithRateLimit, type RateLimitCallbacks, type RateLimitRetryOptions } from './rate-limit-controller.js'
 
 export interface LLMClientWithModel extends LLMClient {
   getModel(): string
@@ -27,6 +29,40 @@ export interface LLMClientWithModel extends LLMClient {
   getProfile(): ModelProfile
   getBackend(): Backend
   setBackend(backend: Backend): void
+  setRateLimit(options: {
+    rateLimiter: RateLimiter
+    retryOptions: RateLimitRetryOptions
+    callbacks?: RateLimitCallbacks
+  }): void
+}
+
+export interface RateLimitController {
+  rateLimiter: RateLimiter
+  retryOptions: RateLimitRetryOptions
+  callbacks?: RateLimitCallbacks
+}
+
+function buildRateLimitOptions(
+  controller: RateLimitController | null,
+  request: LLMCompletionRequest,
+): {
+  rateLimiter: RateLimiter
+  retryOptions: RateLimitRetryOptions
+  callbacks?: RateLimitCallbacks
+  signal?: AbortSignal
+  messageId?: string
+} {
+  return {
+    rateLimiter: controller?.rateLimiter ?? createRateLimiter({ enabled: false, rpm: 0 }),
+    retryOptions: controller?.retryOptions ?? {
+      maxRetries: 0,
+      initialBackoffMs: 0,
+      retryOn429: false,
+    },
+    ...(controller?.callbacks ? { callbacks: controller.callbacks } : {}),
+    ...(request.signal ? { signal: request.signal } : {}),
+    ...(request.messageId ? { messageId: request.messageId } : {}),
+  }
 }
 
 export function createLLMClient(config: Config, initialBackend: Backend = 'unknown'): LLMClientWithModel {
@@ -45,6 +81,9 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
   const thinkingField = config.llm.thinkingField
   const idleTimeout = config.llm.idleTimeout ?? 120_000
 
+  // Rate limit controller (disabled by default until setRateLimit is called)
+  let rateLimitController: RateLimitController | null = null
+
   return {
     getModel() {
       return model
@@ -62,6 +101,14 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
       logger.debug('Setting LLM backend', { from: backend, to: newBackend })
       backend = newBackend
       capabilities = getBackendCapabilities(newBackend)
+    },
+
+    setRateLimit(options: {
+      rateLimiter: RateLimiter
+      retryOptions: RateLimitRetryOptions
+      callbacks?: RateLimitCallbacks
+    }) {
+      rateLimitController = options
     },
 
     setModel(newModel: string) {
@@ -97,12 +144,16 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
           ...(resolvedEffort ? { reasoningEffort: resolvedEffort } : {}),
           ...(thinkingField ? { thinkingField } : {}),
         })
-        const httpResponse = await httpClient.createChatCompletion(
-          createParams,
-          {
-            signal: request.signal,
-          },
-          request.returnRaw,
+        const httpResponse = await runWithRateLimit(
+          () =>
+            httpClient.createChatCompletion(
+              createParams,
+              {
+                signal: request.signal,
+              },
+              request.returnRaw,
+            ),
+          buildRateLimitOptions(rateLimitController, request),
         )
 
         const choice = httpResponse.choices[0]
@@ -173,9 +224,15 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
         })
 
         const { params: streamingParams } = createParams
-        const stream = httpClient.createChatCompletionStream(streamingParams, {
-          signal: request.signal,
-        })
+        const stream = await runWithRateLimit(
+          () =>
+            Promise.resolve(
+              httpClient.createChatCompletionStream(streamingParams, {
+                signal: request.signal,
+              }),
+            ),
+          buildRateLimitOptions(rateLimitController, request),
+        )
 
         let fullContent = ''
         let fullThinking = ''

@@ -8,6 +8,7 @@ import { SETTINGS_KEYS } from '../../../stores/settings'
 import { useSettingsStoreState } from '../useSettingsStore'
 import { useTestButton } from '../../../hooks/useTestButton'
 import { RetryPatternsEditor, type RetryPatternsValue } from '../RetryPatternsEditor'
+import { RateLimitEditor, RATE_LIMIT_DEFAULTS, type RateLimitValue } from '../RateLimitEditor'
 import { useConfigStore } from '../../../stores/config'
 import { useUpdateStore } from '../../../stores/update'
 import { AutoUpdateModal } from '../../AutoUpdateModal'
@@ -29,6 +30,7 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
   })
 
   const [retryPatterns, setRetryPatterns] = useState<RetryPatternsValue>({ patterns: [], maxRetriesPerTurn: 10 })
+  const [rateLimit, setRateLimit] = useState<RateLimitValue>(RATE_LIMIT_DEFAULTS)
   const [proxyUrl, setProxyUrl] = useState('')
   const [defaultAgent, setDefaultAgent] = useState('')
   const [defaultAgentLoaded, setDefaultAgentLoaded] = useState(false)
@@ -61,6 +63,7 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
     getSetting(SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT)
     getSetting(SETTINGS_KEYS.CACHE_WARMING)
     getSetting(SETTINGS_KEYS.RETRY_PATTERNS)
+    getSetting(SETTINGS_KEYS.LLM_RATE_LIMIT)
     getSetting(SETTINGS_KEYS.PROXY_URL)
   }, [getSetting])
 
@@ -69,6 +72,17 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
     if (raw) {
       try {
         setRetryPatterns(JSON.parse(raw))
+      } catch {
+        // ignore parse errors
+      }
+    }
+  }, [settings])
+
+  useEffect(() => {
+    const raw = settings[SETTINGS_KEYS.LLM_RATE_LIMIT]
+    if (raw) {
+      try {
+        setRateLimit({ ...RATE_LIMIT_DEFAULTS, ...JSON.parse(raw) })
       } catch {
         // ignore parse errors
       }
@@ -102,6 +116,14 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
     (value: RetryPatternsValue) => {
       setRetryPatterns(value)
       setSetting(SETTINGS_KEYS.RETRY_PATTERNS, JSON.stringify(value))
+    },
+    [setSetting],
+  )
+
+  const handleRateLimitChange = useCallback(
+    (value: RateLimitValue) => {
+      setRateLimit(value)
+      setSetting(SETTINGS_KEYS.LLM_RATE_LIMIT, JSON.stringify(value))
     },
     [setSetting],
   )
@@ -284,6 +306,16 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
           "continue" prompt. The content that triggered the match is preserved in the chat feed.
         </p>
         <RetryPatternsEditor value={retryPatterns} onChange={handleRetryPatternsChange} />
+      </div>
+      <hr className="border-border" />
+      <div>
+        <h3 className="text-sm font-medium text-text-primary mb-3">Rate Limiting</h3>
+        <p className="text-sm text-text-muted mb-3">
+          Stay within your provider's request limits (requests-per-minute). The throttle holds requests in a queue so
+          OpenFox never exceeds the configured RPM, and the 429 retry automatically recovers from rate-limit errors with
+          exponential backoff (respecting the Retry-After header when present).
+        </p>
+        <RateLimitEditor value={rateLimit} onChange={handleRateLimitChange} />
       </div>
       <hr className="border-border" />
       <SettingsToggle

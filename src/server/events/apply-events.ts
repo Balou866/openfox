@@ -4,7 +4,7 @@
  */
 
 import type { ToolCall, ToolResult, PreparingToolCall } from '../../shared/types.js'
-import type { TurnEvent } from './types.js'
+import type { TurnEvent, RateLimitEntry } from './types.js'
 
 export interface FormatRetry {
   attempt: number
@@ -17,6 +17,15 @@ type CompleteReason = 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 't
 function markComplete(msg: { isComplete?: boolean; completeReason?: CompleteReason }, reason: CompleteReason): void {
   msg.isComplete = true
   msg.completeReason = reason
+}
+
+function pushRateLimitEntry<T>(messages: Map<string, T>, messageId: string, entry: RateLimitEntry): void {
+  const msg = messages.get(messageId)
+  if (msg) {
+    const entries = (msg as T & { rateLimitEvents?: RateLimitEntry[] }).rateLimitEvents ?? []
+    entries.push(entry)
+    ;(msg as T & { rateLimitEvents: RateLimitEntry[] }).rateLimitEvents = entries
+  }
 }
 
 export interface MessageFragment {
@@ -262,6 +271,29 @@ export function applyEvents<
           retries.push({ attempt: data.attempt, maxAttempts: data.maxAttempts, timestamp: event.timestamp })
           ;(msg as T & { formatRetries: FormatRetry[] }).formatRetries = retries
         }
+        break
+      }
+      case 'rate_limit.waiting': {
+        const data = event.data as Extract<TurnEvent, { type: 'rate_limit.waiting' }>['data']
+        pushRateLimitEntry(messages, data.messageId, {
+          kind: 'waiting',
+          currentRpm: data.currentRpm,
+          maxRpm: data.maxRpm,
+          waitMs: data.waitMs,
+          timestamp: event.timestamp,
+        })
+        break
+      }
+      case 'rate_limit.retry': {
+        const data = event.data as Extract<TurnEvent, { type: 'rate_limit.retry' }>['data']
+        pushRateLimitEntry(messages, data.messageId, {
+          kind: 'retry',
+          attempt: data.attempt,
+          maxAttempts: data.maxAttempts,
+          waitMs: data.waitMs,
+          reason: data.reason,
+          timestamp: event.timestamp,
+        })
         break
       }
       case 'chat.done': {

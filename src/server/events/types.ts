@@ -329,6 +329,29 @@ export type TurnEvent =
     }
 
   // ----------------------------------------------------------------------------
+  // Rate limiting (client-side throttle + 429 backoff)
+  // ----------------------------------------------------------------------------
+  | {
+      type: 'rate_limit.waiting'
+      data: {
+        messageId: string
+        currentRpm: number
+        maxRpm: number
+        waitMs: number
+      }
+    }
+  | {
+      type: 'rate_limit.retry'
+      data: {
+        messageId: string
+        attempt: number
+        maxAttempts: number
+        waitMs: number
+        reason: 'retry-after' | 'backoff'
+      }
+    }
+
+  // ----------------------------------------------------------------------------
   // Vision fallback (image description by fallback model)
   // ----------------------------------------------------------------------------
   | {
@@ -409,6 +432,7 @@ export interface SessionSnapshot {
   preparingToolCalls?: PreparingToolCall[]
   visionFallbacks?: VisionFallback[]
   formatRetries?: FormatRetry[]
+  rateLimitEvents?: RateLimitEntry[]
   pendingUserInput?: PendingUserInput
   taskStats?: TaskStats
   messageStats?: MessageStatsEntry[]
@@ -424,10 +448,32 @@ export interface ReadFileEntry {
   tokenCount: number
 }
 
+export interface RateLimitEntry {
+  kind: 'waiting' | 'retry'
+  timestamp: number
+  waitMs: number
+  reason?: 'retry-after' | 'backoff'
+  currentRpm?: number
+  maxRpm?: number
+  attempt?: number
+  maxAttempts?: number
+}
+
 export interface FormatRetry {
   attempt: number
   maxAttempts: number
   timestamp: number
+}
+
+export interface RateLimitEntry {
+  kind: 'waiting' | 'retry'
+  timestamp: number
+  waitMs: number
+  reason?: 'retry-after' | 'backoff'
+  currentRpm?: number
+  maxRpm?: number
+  attempt?: number
+  maxAttempts?: number
 }
 
 export interface VisionFallback {
@@ -495,6 +541,7 @@ export interface SnapshotMessage {
   toolCalls?: ToolCallWithResult[]
   preparingToolCalls?: PreparingToolCall[]
   formatRetries?: FormatRetry[]
+  rateLimitEvents?: RateLimitEntry[]
   isComplete?: boolean
   completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done'
   segments?: MessageSegment[]

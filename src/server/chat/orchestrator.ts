@@ -80,6 +80,56 @@ async function buildRetryPatterns(): Promise<{ retryPatterns: RetryPatternConfig
   }
 }
 
+async function setupRateLimit(
+  sessionId: string,
+  llmClient: LLMClientWithModel,
+  append: (event: import('../events/types.js').TurnEvent) => void,
+): Promise<void> {
+  const { getRateLimitConfig } = await import('../db/settings.js')
+  const { createRateLimiter } = await import('../llm/rate-limiter.js')
+
+  const config = getRateLimitConfig()
+
+  // Only wire up when enabled OR retry-on-429 is enabled
+  if (!config.enabled && !config.retryOn429) {
+    return
+  }
+
+  const rateLimiter = createRateLimiter({ enabled: config.enabled, rpm: config.rpm })
+
+  llmClient.setRateLimit({
+    rateLimiter,
+    retryOptions: {
+      maxRetries: config.maxRetries,
+      initialBackoffMs: config.initialBackoffMs,
+      retryOn429: config.retryOn429,
+    },
+    callbacks: {
+      onWaiting: ({ currentRpm, maxRpm, waitMs, messageId }) => {
+        append({
+          type: 'rate_limit.waiting',
+          data: { messageId: messageId ?? '', currentRpm, maxRpm, waitMs },
+        })
+      },
+      onRetry: ({ attempt, maxAttempts, waitMs, reason, messageId }) => {
+        append({
+          type: 'rate_limit.retry',
+          data: { messageId: messageId ?? '', attempt, maxAttempts, waitMs, reason },
+        })
+      },
+    },
+  })
+
+  logger.debug('Rate limit configured', {
+    sessionId,
+    enabled: config.enabled,
+    rpm: config.rpm,
+    retryOn429: config.retryOn429,
+    maxRetries: config.maxRetries,
+    initialBackoffMs: config.initialBackoffMs,
+  })
+}
+
 function buildGetConversationMessages(
   sessionId: string,
   llmClient: LLMClientWithModel,
@@ -349,6 +399,9 @@ export async function runAgentTurn(
   const runtimeConfig = getRuntimeConfig()
   const configDir = getGlobalConfigDir(runtimeConfig.mode ?? 'production')
   const skills = await getEnabledSkillMetadata(configDir, runtimeConfig.workdir)
+
+  // Configure client-side rate limiting (RPM throttle + 429 backoff)
+  await setupRateLimit(options.sessionId, options.llmClient, append)
 
   return runTopLevelAgentLoop(
     {

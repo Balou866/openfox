@@ -699,6 +699,8 @@ export class SessionManager {
         if (m.toolCalls !== undefined) msg.toolCalls = m.toolCalls
         if (m.segments !== undefined) msg.segments = m.segments
         if (m.stats !== undefined) msg.stats = m.stats
+        if (m.formatRetries !== undefined) msg.formatRetries = m.formatRetries
+        if (m.rateLimitEvents !== undefined) msg.rateLimitEvents = m.rateLimitEvents
         if (m.partial !== undefined) msg.partial = m.partial
         if (m.isStreaming !== undefined) msg.isStreaming = m.isStreaming
         if (m.contextWindowId !== undefined) msg.contextWindowId = m.contextWindowId
@@ -1440,6 +1442,8 @@ export class SessionManager {
       if (m.toolCalls !== undefined) msg.toolCalls = m.toolCalls
       if (m.segments !== undefined) msg.segments = m.segments
       if (m.stats !== undefined) msg.stats = m.stats
+      if (m.formatRetries !== undefined) msg.formatRetries = m.formatRetries
+      if (m.rateLimitEvents !== undefined) msg.rateLimitEvents = m.rateLimitEvents
       if (m.partial !== undefined) msg.partial = m.partial
       if (m.isStreaming !== undefined) msg.isStreaming = m.isStreaming
       if (m.subAgentId !== undefined) msg.subAgentId = m.subAgentId

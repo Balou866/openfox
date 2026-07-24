@@ -621,6 +621,41 @@ export function emitPatternRetry(
 }
 
 /**
+ * Emit rate-limit waiting event (client-side throttle is holding the request).
+ */
+export function emitRateLimitWaiting(
+  sessionId: string,
+  messageId: string,
+  currentRpm: number,
+  maxRpm: number,
+  waitMs: number,
+): void {
+  const eventStore = getEventStore()
+  eventStore.append(sessionId, {
+    type: 'rate_limit.waiting',
+    data: { messageId, currentRpm, maxRpm, waitMs },
+  })
+}
+
+/**
+ * Emit rate-limit retry event (backoff after a 429 response).
+ */
+export function emitRateLimitRetry(
+  sessionId: string,
+  messageId: string,
+  attempt: number,
+  maxAttempts: number,
+  waitMs: number,
+  reason: 'retry-after' | 'backoff',
+): void {
+  const eventStore = getEventStore()
+  eventStore.append(sessionId, {
+    type: 'rate_limit.retry',
+    data: { messageId, attempt, maxAttempts, waitMs, reason },
+  })
+}
+
+/**
  * Emit turn snapshot
  */
 export function emitTurnSnapshot(sessionId: string, snapshot: SessionSnapshot): void {

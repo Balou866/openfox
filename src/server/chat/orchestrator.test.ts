@@ -40,6 +40,13 @@ vi.mock('./conversation-history.js', () => ({
 vi.mock('../db/settings.js', () => ({
   getSetting: vi.fn().mockReturnValue('false'),
   SETTINGS_KEYS: { LLM_DYNAMIC_SYSTEM_PROMPT: 'llm.dynamicSystemPrompt' },
+  getRateLimitConfig: vi.fn(() => ({
+    enabled: false,
+    rpm: 40,
+    retryOn429: false,
+    maxRetries: 5,
+    initialBackoffMs: 2000,
+  })),
 }))
 
 vi.mock('../context/instructions.js', () => ({

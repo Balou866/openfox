@@ -3,9 +3,11 @@ import {
   InvalidPhaseTransitionError,
   LLMError,
   OpenFoxError,
+  RateLimitError,
   SessionNotFoundError,
   ToolExecutionError,
   ValidationError,
+  isRateLimitError,
   isRetryableError,
 } from './errors.js'
 
@@ -35,5 +37,25 @@ describe('error utilities', () => {
     expect(isRetryableError(new ToolExecutionError('read_file', 'bad'))).toBe(true)
     expect(isRetryableError(new ValidationError('nope'))).toBe(false)
     expect(isRetryableError(new Error('plain error'))).toBe(false)
+  })
+
+  it('builds RateLimitError carrying status, retry-after and attempt', () => {
+    const rl = new RateLimitError('Too Many Requests', 429, 5000, 2)
+    expect(rl).toBeInstanceOf(LLMError)
+    expect(rl).toBeInstanceOf(OpenFoxError)
+    expect(rl.name).toBe('RateLimitError')
+    expect(rl.statusCode).toBe(429)
+    expect(rl.retryAfterMs).toBe(5000)
+    expect(rl.attempt).toBe(2)
+    expect(isRateLimitError(rl)).toBe(true)
+  })
+
+  it('treats RateLimitError as retryable', () => {
+    expect(isRetryableError(new RateLimitError('slow down', 429))).toBe(true)
+  })
+
+  it('does not classify generic LLMError as a rate limit error', () => {
+    expect(isRateLimitError(new LLMError('timeout'))).toBe(false)
+    expect(isRateLimitError(new Error('plain'))).toBe(false)
   })
 })
